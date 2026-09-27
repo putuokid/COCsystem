@@ -1,0 +1,18 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CoC情報管理 - セッション選択</title><link rel="stylesheet" href="style.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script></head><body><div class="shell"><header class="header"><h1>CoC 情報管理</h1><span class="spacer"></span><button class="btn" id="logout">ログアウト</button></header><main class="sessions-main"><div class="sessions-head"><div><h2>参加セッション</h2><p class="muted">参加しているセッションを選択してください。</p></div></div><div id="status" class="muted"></div><div id="sessionList" class="session-list"></div></main></div><script>
+async function boot(){
+ const {data:{user},error:userError}=await sb.auth.getUser();
+ if(userError||!user){location.href='login.html';return}
+ const {data:members,error}=await sb.from('t_session_member').select('session_id,role').eq('user_id',user.id);
+ if(error){status.textContent='セッション参加情報の取得に失敗しました: '+error.message;return}
+ if(!members?.length){status.textContent='参加しているセッションはありません。';return}
+ const ids=[...new Set(members.map(x=>x.session_id))];
+ const {data:sessions,error:sError}=await sb.from('t_session').select('session_id,session_name,created_at').in('session_id',ids).order('created_at',{ascending:false});
+ if(sError){status.textContent='セッション情報の取得に失敗しました: '+sError.message;return}
+ const roleMap=new Map(members.map(x=>[x.session_id,x.role]));
+ sessionList.innerHTML='';
+ (sessions||[]).forEach(s=>{const role=roleMap.get(s.session_id)||'pl';const d=document.createElement('button');d.className='session-card';d.innerHTML=`<div><h3>${esc(s.session_name)}</h3><span class="badge ${role==='gm'?'gm-badge':''}">${role.toUpperCase()}</span></div><span class="session-arrow">›</span>`;d.onclick=()=>location.href=`index.html?session=${s.session_id}`;sessionList.appendChild(d)});
+}
+logout.onclick=async()=>{await sb.auth.signOut();location.href='login.html'};
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+boot();
+</script></body></html>
