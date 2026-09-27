@@ -1,18 +1,120 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CoC情報管理 - セッション選択</title><link rel="stylesheet" href="style.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script></head><body><div class="shell"><header class="header"><h1>CoC 情報管理</h1><span class="spacer"></span><button class="btn" id="logout">ログアウト</button></header><main class="sessions-main"><div class="sessions-head"><div><h2>参加セッション</h2><p class="muted">参加しているセッションを選択してください。</p></div></div><div id="status" class="muted"></div><div id="sessionList" class="session-list"></div></main></div><script>
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CoC情報管理 - セッション選択</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+</head>
+<body>
+<div class="shell">
+<header class="header">
+  <h1>CoC 情報管理</h1>
+  <span class="spacer"></span>
+  <button class="btn" id="logout">ログアウト</button>
+</header>
+<main class="sessions-main">
+  <div class="sessions-head">
+    <div>
+      <h2>参加セッション</h2>
+      <p class="muted">参加しているセッションを選択してください。</p>
+    </div>
+    <button class="btn primary" id="openCreate">＋ 新しいセッション</button>
+  </div>
+  <div id="status" class="muted"></div>
+  <div id="sessionList" class="session-list"></div>
+</main>
+</div>
+
+<div id="modal" class="modal-backdrop hidden" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <h2 id="modalTitle">新しいセッションを作成</h2>
+      <button class="icon-btn" id="closeCreate" aria-label="閉じる">×</button>
+    </div>
+    <label>セッション名</label>
+    <input id="newSessionName" maxlength="200" placeholder="例：アイデンティカルの葬列">
+    <p class="muted">作成したあなたが自動的にGMになります。</p>
+    <div id="createError" class="error"></div>
+    <div class="modal-actions">
+      <button class="btn" id="cancelCreate">キャンセル</button>
+      <button class="btn primary" id="createSession">作成</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const statusEl=document.getElementById('status');
+const listEl=document.getElementById('sessionList');
+const modal=document.getElementById('modal');
+const nameInput=document.getElementById('newSessionName');
+const createError=document.getElementById('createError');
+let currentUser=null;
+
 async function boot(){
  const {data:{user},error:userError}=await sb.auth.getUser();
  if(userError||!user){location.href='login.html';return}
- const {data:members,error}=await sb.from('t_session_member').select('session_id,role').eq('user_id',user.id);
- if(error){status.textContent='セッション参加情報の取得に失敗しました: '+error.message;return}
- if(!members?.length){status.textContent='参加しているセッションはありません。';return}
+ currentUser=user;
+ await loadSessions();
+}
+
+async function loadSessions(){
+ statusEl.textContent='読み込み中…';
+ const {data:members,error}=await sb.from('t_session_member').select('session_id,role').eq('user_id',currentUser.id);
+ if(error){statusEl.textContent='セッション参加情報の取得に失敗しました: '+error.message;return}
+ if(!members?.length){statusEl.textContent='参加しているセッションはありません。右上から新しいセッションを作成できます。';listEl.innerHTML='';return}
  const ids=[...new Set(members.map(x=>x.session_id))];
  const {data:sessions,error:sError}=await sb.from('t_session').select('session_id,session_name,created_at').in('session_id',ids).order('created_at',{ascending:false});
- if(sError){status.textContent='セッション情報の取得に失敗しました: '+sError.message;return}
+ if(sError){statusEl.textContent='セッション情報の取得に失敗しました: '+sError.message;return}
  const roleMap=new Map(members.map(x=>[x.session_id,x.role]));
- sessionList.innerHTML='';
- (sessions||[]).forEach(s=>{const role=roleMap.get(s.session_id)||'pl';const d=document.createElement('button');d.className='session-card';d.innerHTML=`<div><h3>${esc(s.session_name)}</h3><span class="badge ${role==='gm'?'gm-badge':''}">${role.toUpperCase()}</span></div><span class="session-arrow">›</span>`;d.onclick=()=>location.href=`index.html?session=${s.session_id}`;sessionList.appendChild(d)});
+ statusEl.textContent='';
+ listEl.innerHTML='';
+ (sessions||[]).forEach(s=>{
+   const role=roleMap.get(s.session_id)||'pl';
+   const d=document.createElement('button');
+   d.className='session-card';
+   d.innerHTML=`<div><h3>${esc(s.session_name)}</h3><span class="badge ${role==='gm'?'gm-badge':''}">${role.toUpperCase()}</span></div><span class="session-arrow">›</span>`;
+   d.onclick=()=>location.href=`index.html?session=${s.session_id}`;
+   listEl.appendChild(d);
+ });
 }
-logout.onclick=async()=>{await sb.auth.signOut();location.href='login.html'};
+
+function openModal(){createError.textContent='';nameInput.value='';modal.classList.remove('hidden');modal.setAttribute('aria-hidden','false');setTimeout(()=>nameInput.focus(),0)}
+function closeModal(){modal.classList.add('hidden');modal.setAttribute('aria-hidden','true')}
+
+async function createNewSession(){
+ const sessionName=nameInput.value.trim();
+ if(!sessionName){createError.textContent='セッション名を入力してください。';nameInput.focus();return}
+ const btn=document.getElementById('createSession');
+ btn.disabled=true;btn.textContent='作成中…';createError.textContent='';
+
+ // 1. セッション本体を作成
+ const {data:created,error:sError}=await sb.from('t_session').insert({session_name:sessionName}).select('session_id').single();
+ if(sError){createError.textContent='セッション作成に失敗しました: '+sError.message;btn.disabled=false;btn.textContent='作成';return}
+
+ // 2. 作成者自身をGMとして登録
+ const {error:mError}=await sb.from('t_session_member').insert({session_id:created.session_id,user_id:currentUser.id,role:'gm'});
+ if(mError){
+   createError.textContent='GM登録に失敗しました: '+mError.message+'（session_id: '+created.session_id+'）';
+   btn.disabled=false;btn.textContent='作成';return;
+ }
+
+ // 3. 空の共有メモを用意（失敗しても後からupsert可能なので致命扱いしない）
+ await sb.from('t_session_memo').upsert({session_id:created.session_id,content:'',updated_at:new Date().toISOString()});
+ location.href=`index.html?session=${created.session_id}`;
+}
+
+document.getElementById('openCreate').onclick=openModal;
+document.getElementById('closeCreate').onclick=closeModal;
+document.getElementById('cancelCreate').onclick=closeModal;
+document.getElementById('createSession').onclick=createNewSession;
+nameInput.addEventListener('keydown',e=>{if(e.key==='Enter')createNewSession()});
+modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});
+document.getElementById('logout').onclick=async()=>{await sb.auth.signOut();location.href='login.html'};
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 boot();
-</script></body></html>
+</script>
+</body>
+</html>
