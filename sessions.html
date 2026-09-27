@@ -90,20 +90,14 @@ async function createNewSession(){
  const btn=document.getElementById('createSession');
  btn.disabled=true;btn.textContent='作成中…';createError.textContent='';
 
- // 1. セッション本体を作成
- const {data:created,error:sError}=await sb.from('t_session').insert({session_name:sessionName}).select('session_id').single();
- if(sError){createError.textContent='セッション作成に失敗しました: '+sError.message;btn.disabled=false;btn.textContent='作成';return}
-
- // 2. 作成者自身をGMとして登録
- const {error:mError}=await sb.from('t_session_member').insert({session_id:created.session_id,user_id:currentUser.id,role:'gm'});
- if(mError){
-   createError.textContent='GM登録に失敗しました: '+mError.message+'（session_id: '+created.session_id+'）';
+ // DB側RPCで、セッション本体・作成者GM・共有メモを一括作成
+ const {data:sessionId,error}=await sb.rpc('create_session',{p_session_name:sessionName});
+ if(error){
+   createError.textContent='セッション作成に失敗しました: '+error.message;
    btn.disabled=false;btn.textContent='作成';return;
  }
 
- // 3. 空の共有メモを用意（失敗しても後からupsert可能なので致命扱いしない）
- await sb.from('t_session_memo').upsert({session_id:created.session_id,content:'',updated_at:new Date().toISOString()});
- location.href=`index.html?session=${created.session_id}`;
+ location.href=`index.html?session=${sessionId}`;
 }
 
 document.getElementById('openCreate').onclick=openModal;
