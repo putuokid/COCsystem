@@ -14,3 +14,6 @@
 
 /* v6 participant management */
 .member-list{display:flex;flex-direction:column;gap:10px;margin-top:16px}.member-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid #ddd;border-radius:10px;background:#fff}.member-row .member-name{font-weight:700}.member-row .member-meta{font-size:13px;color:#777}.member-row .spacer{flex:1}.member-actions{display:flex;gap:8px;align-items:center}.danger{color:#b42318}.btn.danger-btn{border-color:#f0b8b3;color:#b42318;background:#fff}.btn.danger-btn:hover{background:#fff5f4}.participant-head{display:flex;gap:12px;align-items:center;margin-bottom:18px}.participant-head h2{margin:0}.add-member-box{display:flex;gap:10px;align-items:end;flex-wrap:wrap;padding:16px;border:1px solid #ddd;border-radius:10px;background:#fff;margin-top:18px}.add-member-box label{display:block;font-size:13px;margin-bottom:5px}.add-member-box select{min-width:260px}.notice{padding:10px 12px;border-radius:8px;background:#f4f4f4;margin:10px 0}.header .manage-members{margin-left:8px}
+
+/* v7 shared memo */
+.memo h3{margin-top:0;margin-bottom:12px}.memo textarea{font-size:14px;line-height:1.65}.memo-status{min-height:22px;margin-top:8px;font-size:12px;color:#6b7280}.memo-status.ok{color:#176b3a}.memo-status.error{color:#b42318}.memo-status.remote{color:#315b8a}
